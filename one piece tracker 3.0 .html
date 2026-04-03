@@ -1,0 +1,189 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>One Piece Tracker</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <style>
+    body { background:#111; color:white; font-family:Arial; text-align:center; padding:20px; }
+    .card { max-width:420px; margin:auto; background:#1c1c1c; padding:20px; border-radius:15px; }
+    input, button { padding:10px; width:100%; border-radius:8px; border:none; margin-top:8px; }
+    button { cursor:pointer; background:#e63946; color:white; }
+    .bar { background:#333; height:12px; border-radius:10px; margin:6px 0; }
+    .fill { background:red; height:100%; border-radius:10px; }
+    .arc { text-align:left; margin-top:8px; }
+    .small { font-size:12px; }
+  </style>
+</head>
+<body>
+<link rel="icon" type="image/png" href="one piece.png">
+<div class="card">
+  <h2>One Piece Tracker</h2>
+  <p style="font-size:16px;color:#8BBAE1">fan made</p>
+   <!-- 
+   <p>Search by Name:</p>
+  <input id="nameSearch" placeholder="Type episode name..." oninput="searchByName()">
+  <div id="suggestions" class="suggestions"></div>
+  <button onclick="goToEpisode()">Go</button>
+   -->
+  <p>Episode:</p>
+  <input id="episode" type="number">
+  <button onclick="toggleWatched()" id="watchBtn">Mark Watched</button>
+
+  <p id="watchedStatus"></p>
+
+  <p id="type"></p>
+  <font color=#8BBAE1> 
+  <p id="title"></p>
+  <font color=#fffffff>
+  <p id="seriesRating"></p>
+
+  <p>Total Progress</p>
+  <div class="bar"><div id="bar" class="fill"></div></div>
+  <p id="percent"></p>
+   <font color=#8BBAE1> 
+  <p id="remaining"></p>
+  <font color=#fffffff>
+  <h3>Arc Progress</h3>
+  <div id="arcs"></div>
+
+  
+</div>
+
+<script>
+const TOTAL = 1155;
+
+const arcs = [
+  ["East Blue",1,61],
+  ["Alabasta",62,130],
+  ["Skypiea",131,206],
+  ["Water 7 / Enies Lobby",207,325],
+  ["Thriller Bark",326,381],
+  ["Marineford",382,516],
+  ["Fish-Man Island",517,574],
+  ["Dressrosa",575,746],
+  ["Whole Cake",747,894],
+  ["Wano",895,1088],
+  ["Egghead",1089,1155],
+  ["Elbaf",1155,TOTAL]
+];
+
+const filler = [[54,61],[98,99],[102,102],[131,143],[196,206],[220,226],[326,336],[382,384],[406,407],[426,429],[457,458],[492,492],[542,542],[575,578],[626,628],[747,750],[895,896]];
+const mixed = [[45,47],[68,69],[101,101],[279,283],[317,319]];
+
+function getType(ep){
+  for(let [s,e] of filler) if(ep>=s && ep<=e) return "FILLER";
+  for(let [s,e] of mixed) if(ep>=s && ep<=e) return "MIXED";
+  return "CANON";
+}
+
+function getWatched(){
+  return JSON.parse(localStorage.getItem("watched")||"[]");
+}
+
+function toggleWatched(){
+  let ep = parseInt(document.getElementById("episode").value)||0;
+  let watched = getWatched();
+
+  if(watched.includes(ep)){
+    watched = watched.filter(e=>e!==ep);
+  } else {
+    watched.push(ep);
+  }
+
+  localStorage.setItem("watched",JSON.stringify(watched));
+  update();
+}
+
+function goToEpisode(){
+  let ep = document.getElementById("search").value;
+  document.getElementById("episode").value = ep;
+  update();
+}
+
+async function getSeriesData(){
+  try{
+    let res = await fetch("https://api.jikan.moe/v4/anime/21");
+    let data = await res.json();
+    return data.data;
+  }catch{
+    return null;
+  }
+}
+
+async function getEpisodeData(ep){
+  try{
+    let res = await fetch(`https://api.jikan.moe/v4/anime/21/episodes/${ep}`);
+    let data = await res.json();
+    return data.data;
+  }catch{
+    return null;
+  }
+}
+
+async function update(){
+  let ep = parseInt(document.getElementById("episode").value)||0;
+
+  localStorage.setItem("op_ep",ep);
+
+  let percent = (ep/TOTAL)*100;
+  document.getElementById("bar").style.width = percent+"%";
+  document.getElementById("percent").innerText = percent.toFixed(2)+"%";
+
+  document.getElementById("type").innerText = "Type: "+getType(ep);
+  document.getElementById("remaining").innerText = "Episodes left: "+(TOTAL-ep);
+
+  // watched status
+  let watched = getWatched();
+  document.getElementById("watchedStatus").innerText = watched.includes(ep) ? "✅ Watched" : "❌ Not Watched";
+
+  document.getElementById("watchBtn").innerText = watched.includes(ep) ? "Unmark Watched" : "Mark Watched";
+
+  // episode title
+  document.getElementById("title").innerText = "Loading...";
+
+  let epInfo = await getEpisodeData(ep);
+  if(epInfo){
+    document.getElementById("title").innerText = "Title: "+epInfo.title;
+  } else {
+    document.getElementById("title").innerText = "Title: Not found";
+  }
+
+  // series rating
+  let series = await getSeriesData();
+  if(series){
+    document.getElementById("seriesRating").innerText = "Series Rating: "+series.score+"/10";
+  } else {
+    document.getElementById("seriesRating").innerText = "Series Rating: N/A";
+  }
+
+  // arcs
+  let html = "";
+
+  arcs.forEach(a=>{
+    let [name,start,end]=a;
+    let arcPercent = 0;
+
+    if(ep>=end) arcPercent = 100;
+    else if(ep>=start)
+      arcPercent = ((ep-start+1)/(end-start+1))*100;
+
+    html += `
+      <div class="arc">
+        <div class="small">${name} (${arcPercent.toFixed(0)}%)</div>
+        <div class="bar">
+          <div class="fill" style="width:${arcPercent}%"></div>
+        </div>
+      </div>
+    `;
+  });
+
+  document.getElementById("arcs").innerHTML = html;
+}
+
+document.getElementById("episode").value = localStorage.getItem("op_ep")||68;
+document.getElementById("episode").addEventListener("input",update);
+update();
+</script>
+
+</body>
+</html>
